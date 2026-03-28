@@ -13,7 +13,7 @@ st.set_page_config(page_title="Chat PDF")
 PDF_FOLDER_PATH = "publications"
 FAISS_INDEX_PATH = "faiss_index"
 
-# ✅ GROQ CLIENT (IMPORTANT)
+# ✅ GROQ CLIENT
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 # ---------------- PDF PROCESSING ---------------- #
@@ -33,7 +33,7 @@ def get_pdf_text_from_folder(folder_path):
 
 
 def get_text_chunks(text):
-    splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=8000, chunk_overlap=800)
     return splitter.split_text(text)
 
 
@@ -58,7 +58,7 @@ def process_pdfs():
 def get_conversational_chain():
 
     def run_chain(inputs):
-        context = inputs["context"][:2000]
+        context = inputs["context"][:1200]   # ✅ reduced size
         question = inputs["question"]
 
         prompt = f"""
@@ -69,7 +69,7 @@ Summarize clearly:
 - method used
 - key contribution
 
-Do NOT copy full text. Keep it concise (5–8 lines).
+Do NOT copy full text. Keep it concise (5–7 lines).
 
 Context:
 {context}
@@ -80,12 +80,16 @@ Question:
 Answer:
 """
 
-        response = client.chat.completions.create(
-            model="llama3-8b-8192",
-            messages=[{"role": "user", "content": prompt}]
-        )
+        try:
+            response = client.chat.completions.create(
+                model="llama3-70b-8192",
+                messages=[{"role": "user", "content": prompt}]
+            )
 
-        return {"text": response.choices[0].message.content}
+            return {"text": response.choices[0].message.content}
+
+        except Exception as e:
+            return {"text": f"⚠️ Groq Error: {str(e)}"}
 
     return run_chain
 
@@ -97,7 +101,6 @@ def list_paper_titles(docs):
 
 def list_author_papers(author_name, docs):
     papers = []
-
     chain = get_conversational_chain()
 
     for doc in docs:
@@ -105,7 +108,7 @@ def list_author_papers(author_name, docs):
             title = doc.metadata.get("title", "Untitled")
 
             summary = chain({
-                "context": doc.page_content,
+                "context": doc.page_content[:1200],
                 "question": "Summarize this paper"
             }).get("text", "")
 
